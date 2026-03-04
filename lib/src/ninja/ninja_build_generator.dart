@@ -108,17 +108,16 @@ final class NinjaBuildGenerator {
     final targetArgs = await _resolvedTargetArgs(compiler);
 
     final objectsDirectory = Directory.fromUri(
-      _outputDirectory.resolve('.ninja/obj/'),
+      _outputDirectory.resolve('obj/'),
     );
     await objectsDirectory.create(recursive: true);
     await Directory.fromUri(_parentDirectory(artifact)).create(recursive: true);
 
     final objectExtension = compiler.tool == cl ? '.obj' : '.o';
     final compileSteps = <_CompileStep>[];
-    for (var index = 0; index < sources.length; index++) {
-      final source = sources[index];
+    for (final source in sources) {
       final object = objectsDirectory.uri.resolve(
-        '${index}_${_sanitizeFileStem(source)}$objectExtension',
+        _objectFileNameForSource(source, objectExtension),
       );
       compileSteps.add(_CompileStep(source: source, object: object));
     }
@@ -707,6 +706,16 @@ final class NinjaBuildGenerator {
     final segments = source.pathSegments.where((segment) => segment.isNotEmpty);
     final stem = segments.isEmpty ? 'source' : segments.last.split('.').first;
     return stem.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+  }
+
+  /// Creates an order-independent object filename for a source path.
+  String _objectFileNameForSource(Uri source, String extension) {
+    final normalizedPath = source.toFilePath().replaceAll('\\', '/');
+    final fingerprint = sha256
+        .convert(utf8.encode(normalizedPath))
+        .toString()
+        .substring(0, 16);
+    return '${_sanitizeFileStem(source)}_$fingerprint$extension';
   }
 
   /// Returns the containing directory for an output file.
