@@ -1,0 +1,123 @@
+// Copyright (c) 2023, the Dart project authors.  Please see the AUTHORS file
+// for details. All rights reserved. Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
+
+@OnPlatform({'mac-os': Timeout.factor(2), 'windows': Timeout.factor(10)})
+library;
+
+import 'package:code_assets/code_assets.dart';
+import 'package:collection/collection.dart';
+import 'package:hooks/hooks.dart';
+import 'package:native_toolchain_ninja/src/cbuilder/compiler_resolver.dart';
+import 'package:native_toolchain_ninja/src/native_toolchain/apple_clang.dart';
+import 'package:native_toolchain_ninja/src/native_toolchain/clang.dart';
+import 'package:native_toolchain_ninja/src/native_toolchain/msvc.dart' as msvc;
+import 'package:native_toolchain_ninja/src/tool/tool_error.dart';
+import 'package:test/test.dart';
+
+import '../helpers.dart';
+
+void main() {
+  test('Input provided compiler', () async {
+    final tempUri = await tempDirForTest();
+    final tempUri2 = await tempDirForTest();
+    final ar = [
+      ...await appleAr.defaultResolver!.resolve(systemContext),
+      ...await msvc.lib.defaultResolver!.resolve(systemContext),
+      ...await llvmAr.defaultResolver!.resolve(systemContext),
+    ].first.uri;
+    final cc = [
+      ...await appleClang.defaultResolver!.resolve(systemContext),
+      ...await msvc.cl.defaultResolver!.resolve(systemContext),
+      ...await clang.defaultResolver!.resolve(systemContext),
+    ].first.uri;
+    final ld = [
+      ...await appleLd.defaultResolver!.resolve(systemContext),
+      ...await msvc.msvcLink.defaultResolver!.resolve(systemContext),
+      ...await lld.defaultResolver!.resolve(systemContext),
+    ].first.uri;
+    final envScript = [
+      ...await msvc.vcvars64.defaultResolver!.resolve(systemContext),
+    ].firstOrNull?.uri;
+
+    final targetOS = OS.current;
+    final buildInputBuilder = BuildInputBuilder()
+      ..setupShared(
+        packageName: 'dummy',
+        packageRoot: tempUri,
+        outputFile: tempUri.resolve('output.json'),
+        outputDirectoryShared: tempUri2,
+      )
+      ..config.setupBuild(linkingEnabled: false)
+      ..addExtension(
+        CodeAssetExtension(
+          targetOS: targetOS,
+          macOS: targetOS == OS.macOS
+              ? MacOSCodeConfig(targetVersion: defaultMacOSVersion)
+              : null,
+          targetArchitecture: Architecture.current,
+          linkModePreference: .dynamic,
+          cCompiler: CCompilerConfig(
+            archiver: ar,
+            compiler: cc,
+            linker: ld,
+            windows: targetOS == OS.windows
+                ? WindowsCCompilerConfig(
+                    developerCommandPrompt: DeveloperCommandPrompt(
+                      script: envScript!,
+                      arguments: [],
+                    ),
+                  )
+                : null,
+          ),
+        ),
+      );
+    final buildInput = buildInputBuilder.build();
+    final resolver = CompilerResolver(
+      codeConfig: buildInput.config.code,
+      logger: logger,
+    );
+    final compiler = await resolver.resolveCompiler();
+    final archiver = await resolver.resolveArchiver();
+    expect(compiler.uri, buildInput.config.code.cCompiler?.compiler);
+    expect(archiver.uri, buildInput.config.code.cCompiler?.archiver);
+    final environment = await resolver.resolveEnvironment(compiler);
+    if (targetOS == OS.windows) {
+      expect(environment, isNot(equals({})));
+    } else {
+      expect(environment, equals({}));
+    }
+  });
+
+  test('No compiler found', () async {
+    final tempUri = await tempDirForTest();
+    final tempUri2 = await tempDirForTest();
+    final buildInputBuilder = BuildInputBuilder()
+      ..setupShared(
+        packageName: 'dummy',
+        packageRoot: tempUri,
+        outputFile: tempUri.resolve('output.json'),
+        outputDirectoryShared: tempUri2,
+      )
+      ..config.setupBuild(linkingEnabled: false)
+      ..addExtension(
+        CodeAssetExtension(
+          targetOS: .windows,
+          targetArchitecture: .arm64,
+          linkModePreference: .dynamic,
+          cCompiler: cCompiler,
+        ),
+      );
+
+    final buildInput = buildInputBuilder.build();
+
+    final resolver = CompilerResolver(
+      codeConfig: buildInput.config.code,
+      logger: logger,
+      hostOS: .android, // This is never a host.
+      hostArchitecture: .arm64, // This is never a host.
+    );
+    expect(resolver.resolveCompiler, throwsA(isA<ToolError>()));
+    expect(resolver.resolveArchiver, throwsA(isA<ToolError>()));
+  });
+}
