@@ -3,25 +3,17 @@
 [![pub package](https://img.shields.io/pub/v/native_toolchain_ninja.svg)](https://pub.dev/packages/native_toolchain_ninja)
 [![package publisher](https://img.shields.io/pub/publisher/native_toolchain_ninja.svg)](https://pub.dev/packages/native_toolchain_ninja/publisher)
 
-A library to invoke the native C compiler installed on the host machine.
+A library to invoke the native C compiler installed on the host machine through [ninja](https://ninja-build.org) build.
 
 ## Status: Experimental
 
-**NOTE**: This package is currently experimental and published under the
-[labs.dart.dev](https://dart.dev/dart-team-packages) pub publisher in order to
-solicit feedback.
+This package copies the syntax of [native_toolchain_c](https://pub.dev/packages/native_toolchain_c). Simply replace `CBuilder` with `NinjaBuilder` and the build will be run through `ninja` instead of invoking the compiler directly.
 
-For packages in the labs.dart.dev publisher we generally plan to either graduate
-the package into a supported publisher (dart.dev, tools.dart.dev) after a period
-of feedback and iteration, or discontinue the package. These packages have a
-much higher expected rate of API and breaking changes.
+Building through `ninja` allows for incremental builds, better dependency tracking and automatic `compile_commands.json` generation.
 
-Your feedback is valuable and will help us evolve this package.
-For bugs, please file an issue in the
-[bug tracker](https://github.com/dart-lang/native/issues).
-
+Ninja does not need to be installed on the host system, it will be downloaded during the build. The download is checked against
+original sha256 checksum to ensure integrity. See [ninja_releases.json](lib/src/ninja/ninja_releases.json) for more information.
 
 ## Example
 
-An example can be found in [../hooks/example/build/](
-../hooks/example/build/).
+An example can be found in [example/package](example/package/hook).

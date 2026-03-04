@@ -44,6 +44,8 @@ jobs:
 
       - run: dart pub get
 
+      - run: dart pub get --directory=example/package
+
       - run: dart format --set-exit-if-changed .
 
       - run: dart analyze .
