@@ -13,12 +13,15 @@ import 'package:crypto/crypto.dart';
 import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 
+import '../tool/tool_resolver.dart';
+
 /// Ensures a Ninja executable exists next to the generated build file.
 final class NinjaBuildDownloader {
   final Uri buildFile;
   final Logger? logger;
   final Uri? releasesFile;
   final Future<Uint8List> Function(Uri archiveUri)? _downloadOverride;
+  final Future<Uri?> Function()? _systemNinjaOverride;
   final HttpClient Function() _httpClientFactory;
 
   NinjaBuildDownloader({
@@ -26,12 +29,20 @@ final class NinjaBuildDownloader {
     required this.logger,
     this.releasesFile,
     Future<Uint8List> Function(Uri archiveUri)? downloadOverride,
+    Future<Uri?> Function()? systemNinjaOverride,
     HttpClient Function()? httpClientFactory,
   }) : _downloadOverride = downloadOverride,
+       _systemNinjaOverride = systemNinjaOverride,
        _httpClientFactory = httpClientFactory ?? HttpClient.new;
 
-  /// Reuses the local Ninja binary if present, otherwise downloads it.
+  /// Reuses a system or local Ninja binary, otherwise downloads it.
   Future<Uri> ensureAvailable() async {
+    final systemNinja = await (_systemNinjaOverride?.call() ?? _systemNinja());
+    if (systemNinja != null) {
+      logger?.finer('Using system Ninja at ${systemNinja.toFilePath()}.');
+      return systemNinja;
+    }
+
     final binary = _binaryUri;
     if (await File.fromUri(binary).exists()) {
       return binary;
@@ -48,6 +59,19 @@ final class NinjaBuildDownloader {
 
     logger?.info('Downloaded ${binary.toFilePath()}.');
     return binary;
+  }
+
+  /// Resolves Ninja from the host PATH.
+  Future<Uri?> _systemNinja() async {
+    final executableName = Platform.isWindows ? 'ninja.exe' : 'ninja';
+    final resolved = await PathToolResolver(
+      toolName: 'Ninja',
+      executableName: executableName,
+    ).resolve(ToolResolvingContext(logger: logger));
+    if (resolved.isEmpty) {
+      return null;
+    }
+    return resolved.first.uri;
   }
 
   Uri get _workingDirectory => File.fromUri(buildFile).parent.uri;
