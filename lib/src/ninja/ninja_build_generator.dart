@@ -2,9 +2,11 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:code_assets/code_assets.dart';
+import 'package:crypto/crypto.dart';
 import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 
@@ -78,6 +80,18 @@ final class NinjaBuildGenerator {
 
   /// Resolves the toolchain and writes the Ninja file into the build output.
   Future<GeneratedNinjaBuild> generate() async {
+    // If build.ninja already exists and was generated from same configuration,
+    // reuse it to avoid expensive tool resolving, especially on Windows.
+    final buildFile = _outputDirectory.resolve('build.ninja');
+    final fingerprintFile = _outputDirectory.resolve('build.generator.sha256');
+    final fingerprint = _constructorArgumentsFingerprint();
+    final existingFingerprint = await _readFingerprint(fingerprintFile);
+    if (existingFingerprint == fingerprint &&
+        await File.fromUri(buildFile).exists()) {
+      logger?.info('Reusing ${buildFile.toFilePath()} (matching fingerprint).');
+      return GeneratedNinjaBuild(buildFile: buildFile);
+    }
+
     if (_codeConfig.targetOS == OS.windows && cppLinkStdLib != null) {
       throw ArgumentError.value(
         cppLinkStdLib,
@@ -109,7 +123,6 @@ final class NinjaBuildGenerator {
       compileSteps.add(_CompileStep(source: source, object: object));
     }
 
-    final buildFile = _outputDirectory.resolve('build.ninja');
     await File.fromUri(buildFile).writeAsString(
       _buildNinjaFile(
         compileSteps: compileSteps,
@@ -119,9 +132,78 @@ final class NinjaBuildGenerator {
         targetArgs: targetArgs,
       ),
     );
+    await File.fromUri(fingerprintFile).writeAsString(fingerprint);
 
     logger?.info('Generated ${buildFile.toFilePath()}.');
     return GeneratedNinjaBuild(buildFile: buildFile);
+  }
+
+  /// Creates a stable hash from constructor arguments only.
+  String _constructorArgumentsFingerprint() {
+    final cCompiler = _codeConfig.cCompiler;
+    final targetOS = _codeConfig.targetOS;
+    final sortedDefineEntries = defines.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final payload = <String, Object?>{
+      'input': {
+        'outputDirectory': _outputDirectory.toFilePath(),
+        'targetOS': targetOS.name,
+        'targetArchitecture': _codeConfig.targetArchitecture.name,
+        'androidTargetNdkApi': targetOS == OS.android
+            ? _codeConfig.android.targetNdkApi
+            : null,
+        'iosTargetSdk': targetOS == OS.iOS
+            ? _codeConfig.iOS.targetSdk.toString()
+            : null,
+        'iosTargetVersion': targetOS == OS.iOS
+            ? _codeConfig.iOS.targetVersion.toString()
+            : null,
+        'macOSTargetVersion': targetOS == OS.macOS
+            ? _codeConfig.macOS.targetVersion.toString()
+            : null,
+        'cCompiler': cCompiler == null
+            ? null
+            : {
+                'compiler': cCompiler.compiler.toFilePath(),
+                'archiver': cCompiler.archiver.toFilePath(),
+                'linker': cCompiler.linker.toFilePath(),
+              },
+      },
+      'artifact': artifact.toFilePath(),
+      'type': type.name,
+      'sources': [for (final source in sources) source.toFilePath()],
+      'includes': [for (final include in includes) include.toFilePath()],
+      'forcedIncludes': [
+        for (final forcedInclude in forcedIncludes) forcedInclude.toFilePath(),
+      ],
+      'frameworks': frameworks,
+      'libraries': libraries,
+      'libraryDirectories': [
+        for (final directory in libraryDirectories) directory.toFilePath(),
+      ],
+      'installName': installName?.toFilePath(),
+      'flags': flags,
+      'defines': [
+        for (final entry in sortedDefineEntries) [entry.key, entry.value],
+      ],
+      'pic': pic,
+      'std': std,
+      'language': language.name,
+      'cppLinkStdLib': cppLinkStdLib,
+      'optimizationLevel': optimizationLevel.toString(),
+      'linkMode': linkMode.runtimeType.toString(),
+      'version': 1,
+    };
+    return sha256.convert(utf8.encode(jsonEncode(payload))).toString();
+  }
+
+  /// Reads an existing fingerprint file if present.
+  Future<String?> _readFingerprint(Uri fingerprintFile) async {
+    final file = File.fromUri(fingerprintFile);
+    if (!await file.exists()) {
+      return null;
+    }
+    return (await file.readAsString()).trim();
   }
 
   /// Renders the full `build.ninja` file for the resolved toolchain.
