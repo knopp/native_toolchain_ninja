@@ -2,7 +2,7 @@ name: native_toolchain_ninja
 description: >-
   A library to generate Ninja build files for native assets and run Ninja builds.
 version: 0.1.0
-# repository: https://github.com/dart-lang/native/tree/main/pkgs/native_toolchain_ninja
+repository: https://github.com/knopp/native_toolchain_ninja
 
 topics:
   - compiler
