@@ -27,7 +27,5 @@ dependencies:
 dev_dependencies:
   collection: ^1.19.1
   dart_flutter_team_lints: ^3.5.2
-  # native_test_helpers:
-  #   path: ../native_test_helpers/
   test: ^1.25.15
   test_descriptor: ^2.0.2

@@ -268,6 +268,70 @@ void main() {
     },
   );
 
+  test(
+    'NinjaBuilder reuses build.ninja when constructor args are unchanged',
+    () async {
+      if (Platform.isWindows && cCompiler == null) {
+        return;
+      }
+
+      final toolchain = Platform.isWindows
+          ? cCompiler!
+          : await _createFakePosixToolchain();
+      final targetOS = Platform.isWindows ? OS.windows : OS.linux;
+      final tempUri = await tempDirForTest();
+      final tempUri2 = await tempDirForTest();
+      final sourceUri = packageUri.resolve(
+        'test/cbuilder/testfiles/hello_world/src/hello_world.c',
+      );
+
+      final buildInputBuilder = BuildInputBuilder()
+        ..setupShared(
+          packageName: 'hello_world',
+          packageRoot: tempUri,
+          outputFile: tempUri.resolve('output.json'),
+          outputDirectoryShared: tempUri2,
+        )
+        ..config.setupBuild(linkingEnabled: false)
+        ..addExtension(
+          CodeAssetExtension(
+            targetOS: targetOS,
+            targetArchitecture: Architecture.current,
+            linkModePreference: LinkModePreference.dynamic,
+            cCompiler: toolchain,
+          ),
+        );
+
+      final buildInput = buildInputBuilder.build();
+      await _installLocalNinja(buildInput.outputDirectory);
+      final builder = NinjaBuilder.executable(
+        name: 'hello_world',
+        sources: [sourceUri.toFilePath()],
+      );
+
+      await builder.run(input: buildInput, output: BuildOutputBuilder());
+
+      final buildFile = File.fromUri(
+        buildInput.outputDirectory.resolve('build.ninja'),
+      );
+      final fingerprintFile = File.fromUri(
+        buildInput.outputDirectory.resolve('build.generator.sha256'),
+      );
+      expect(await buildFile.exists(), isTrue);
+      expect(await fingerprintFile.exists(), isTrue);
+      final buildModifiedBefore = (await buildFile.stat()).modified;
+      final fingerprintModifiedBefore = (await fingerprintFile.stat()).modified;
+
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await builder.run(input: buildInput, output: BuildOutputBuilder());
+
+      final buildModifiedAfter = (await buildFile.stat()).modified;
+      final fingerprintModifiedAfter = (await fingerprintFile.stat()).modified;
+      expect(buildModifiedAfter, buildModifiedBefore);
+      expect(fingerprintModifiedAfter, fingerprintModifiedBefore);
+    },
+  );
+
   test('NinjaBuilder generates MSVC dependency rules on Windows', () async {
     if (!Platform.isWindows || cCompiler == null) {
       return;
