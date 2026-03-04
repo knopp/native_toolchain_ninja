@@ -87,15 +87,19 @@ void main() {
     expect(
       ninja,
       contains(
-        'build .ninja/obj/0_includes.o: compile '
-        '${sourceUri.toFilePath()}',
+        RegExp(
+          r'build obj/includes_[0-9a-f]{16}\.o: compile '
+          '${RegExp.escape(sourceUri.toFilePath())}',
+        ),
       ),
     );
     expect(
       ninja,
       contains(
-        'build libincludes.so: link .ninja/obj/0_includes.o | '
-        'debug/libdebug.so',
+        RegExp(
+          r'build libincludes\.so: link '
+          r'obj/includes_[0-9a-f]{16}\.o \| debug/libdebug\.so',
+        ),
       ),
     );
     expect(ninja, contains('-MMD'));
@@ -159,7 +163,7 @@ void main() {
       expect(ninja, contains(toolchain.archiver.toFilePath()));
       expect(ninja, contains('rcs'));
       expect(ninja, contains('build libadd.a: link'));
-      expect(ninja, contains('.ninja/obj/0_add.o'));
+      expect(ninja, contains(RegExp(r'obj/add_[0-9a-f]{16}\.o')));
     },
   );
 
