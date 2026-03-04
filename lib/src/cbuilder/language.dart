@@ -2,11 +2,11 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'cbuilder.dart';
+import '../ninja/ninja_builder.dart';
 
 /// A programming language that can be selected for compilation of source files.
 ///
-/// See [CBuilder.language] for more information.
+/// See [NinjaBuilder.language] for more information.
 class Language {
   /// The name of the language.
   final String name;

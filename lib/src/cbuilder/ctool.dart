@@ -6,13 +6,12 @@ import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 import 'package:meta/meta.dart';
 
-import 'cbuilder.dart';
-import 'clinker.dart';
+import '../ninja/ninja_builder.dart';
 import 'language.dart';
 import 'optimization_level.dart';
 import 'output_type.dart';
 
-/// Common options for [CBuilder] and [CLinker].
+/// Common options for [NinjaBuilder].
 abstract class CTool {
   /// What kind of artifact to build.
   final OutputType type;
@@ -85,8 +84,8 @@ abstract class CTool {
   /// In addition to the system default directories, libraries will be searched
   /// for in [libraryDirectories].
   ///
-  /// If you want to link to a library that was built by another [CBuilder] or
-  /// [CLinker], either leave the default [libraryDirectories] or include `'.'`
+  /// If you want to link to a library that was built by another [NinjaBuilder],
+  /// either leave the default [libraryDirectories] or include `'.'`
   /// in the list.
   final List<String> libraries;
 
@@ -119,7 +118,7 @@ abstract class CTool {
   ///
   /// When set to `true`, libraries will be compiled with `-fPIC` and
   /// executables with `-fPIE`. Accordingly the corresponding parameter of the
-  /// [CBuilder.executable] constructor is named `pie`.
+  /// [NinjaBuilder.executable] constructor is named `pie`.
   ///
   /// When set to `null`, the default behavior of the linker will be used.
   ///

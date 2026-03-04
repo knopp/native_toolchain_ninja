@@ -22,7 +22,7 @@ FFI_EXPORT int32_t add(int32_t a, int32_t b) {
 #ifdef DEBUG
   printf("Adding %i and %i.\n", a, b);
 #if _WIN32
-  wprintf("Adding %i and %i.\n", a, b);
+  wprintf(L"Adding %i and %i.\n", a, b);
 #endif
 #endif
   return a + b;

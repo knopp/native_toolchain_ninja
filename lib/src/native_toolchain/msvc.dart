@@ -263,15 +263,31 @@ class VisualStudioResolver implements ToolResolver {
     final logger = context.logger;
 
     final result = <ToolInstance>[];
-    for (final vswhereInstance in vswhereInstances.take(1)) {
-      final vswhereResult = await runProcess(
-        executable: vswhereInstance.uri,
-        arguments: ['-format', 'json', '-utf8', '-latest', '-products', '*'],
-        logger: logger,
-      );
-      final instances = parseVswhere(vswhereResult.stdout, logger);
-      result.addAll(instances);
+    Future<void> addInstances({required bool prerelease}) async {
+      for (final vswhereInstance in vswhereInstances.take(1)) {
+        final vswhereResult = await runProcess(
+          executable: vswhereInstance.uri,
+          arguments: [
+            '-format',
+            'json',
+            '-utf8',
+            '-latest',
+            '-products',
+            '*',
+            if (prerelease) '-prerelease',
+          ],
+          logger: logger,
+        );
+        final instances = parseVswhere(vswhereResult.stdout, logger);
+        result.addAll(instances);
+      }
     }
+
+    await addInstances(prerelease: false);
+    if (result.isEmpty) {
+      await addInstances(prerelease: true);
+    }
+
     return result;
   }
 

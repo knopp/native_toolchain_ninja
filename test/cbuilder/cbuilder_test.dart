@@ -98,7 +98,8 @@ void main() {
         }
         expect(result.stdout.trim(), endsWith('Hello world.'));
 
-        final compilerInvocation = logMessages.singleWhere(
+        // FirstWhere because there is second message from ninja -t deps
+        final compilerInvocation = logMessages.firstWhere(
           (message) => message.contains(helloWorldCUri.toFilePath()),
         );
 
@@ -180,7 +181,8 @@ void main() {
               >('add');
           expect(add(1, 2), 3);
 
-          final compilerInvocation = logMessages.singleWhere(
+          // firstWhere because there is second message from ninja -t deps
+          final compilerInvocation = logMessages.firstWhere(
             (message) => message.contains(addCUri.toFilePath()),
           );
           switch ((buildInput.config.code.targetOS, pic)) {
@@ -286,7 +288,8 @@ void main() {
     // Check the forced include is added.
     expect(result.stdout, contains('Macro FIFOO is defined: "QuotedFIFOO"'));
 
-    final compilerInvocation = logMessages.singleWhere(
+    // firstWhere because there is second message from ninja -t deps
+    final compilerInvocation = logMessages.firstWhere(
       (message) => message.contains(definesCUri.toFilePath()),
     );
     expect(compilerInvocation, contains(flag));
@@ -410,7 +413,8 @@ void main() {
         );
     expect(add(1, 2), 3);
 
-    final compilerInvocation = logMessages.singleWhere(
+    // firstWhere because there is second message from ninja -t deps
+    final compilerInvocation = logMessages.firstWhere(
       (message) => message.contains(addCUri.toFilePath()),
     );
     expect(compilerInvocation, contains(stdFlag));
@@ -454,8 +458,15 @@ void main() {
 
     final defaultStdLibLinkFlag = switch (buildInput.config.code.targetOS) {
       OS.windows => null,
-      OS.linux => '-l stdc++',
-      OS.macOS => '-l c++',
+      OS.linux => '-lstdc++',
+      OS.macOS => '-lc++',
+      _ => throw UnimplementedError(),
+    };
+
+    final defaultStdLibCompileFlag = switch (buildInput.config.code.targetOS) {
+      OS.windows => null,
+      OS.linux => '-stdlib=libstdc++',
+      OS.macOS => '-stdlib=libc++',
       _ => throw UnimplementedError(),
     };
 
@@ -476,10 +487,16 @@ void main() {
     expect(result.stdout.trim(), endsWith('Hello world.'));
 
     if (defaultStdLibLinkFlag != null) {
-      final compilerInvocation = logMessages.singleWhere(
+      // firstWhere because there is second message from ninja -t deps
+      final compilerInvocation = logMessages.firstWhere(
         (message) => message.contains(helloWorldCppUri.toFilePath()),
       );
-      expect(compilerInvocation, contains(defaultStdLibLinkFlag));
+      expect(compilerInvocation, contains(defaultStdLibCompileFlag));
+
+      final linkerInvocation = logMessages.firstWhere(
+        (message) => message.contains(executableUri.toFilePath()),
+      );
+      expect(linkerInvocation, contains(defaultStdLibLinkFlag));
     }
   });
 
@@ -526,8 +543,10 @@ void main() {
       cppLinkStdLib: 'stdc++',
       buildMode: .release,
     );
-
-    if (buildInput.config.code.targetOS == OS.windows) {
+    if (buildInput.config.code.targetOS == OS.macOS) {
+      // macOS doesn't have libstdc++ headers.
+      return;
+    } else if (buildInput.config.code.targetOS == OS.windows) {
       await expectLater(
         () => cbuilder.run(
           input: buildInput,
@@ -554,10 +573,15 @@ void main() {
       expect(result.exitCode, 0);
       expect(result.stdout.trim(), endsWith('Hello world.'));
 
-      final compilerInvocation = logMessages.singleWhere(
+      // firstWhere because there is second message from ninja -t deps
+      final compilerInvocation = logMessages.firstWhere(
         (message) => message.contains(helloWorldCppUri.toFilePath()),
       );
-      expect(compilerInvocation, contains('-l stdc++'));
+      expect(compilerInvocation, contains('-stdlib=libstdc++'));
+      final linkerInvocation = logMessages.firstWhere(
+        (message) => message.contains(executableUri.toFilePath()),
+      );
+      expect(linkerInvocation, contains('-lstdc++'));
     }
   });
 

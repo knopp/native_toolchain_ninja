@@ -1,0 +1,214 @@
+// Copyright (c) 2026, the Dart project authors.  Please see the AUTHORS file
+// for details. All rights reserved. Use of this source code is governed by a
+// BSD-style license that can be found in the LICENSE file.
+
+import 'dart:convert';
+import 'dart:ffi';
+import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
+import 'package:logging/logging.dart';
+
+/// Ensures a Ninja executable exists next to the generated build file.
+final class NinjaBuildDownloader {
+  final Uri buildFile;
+  final Logger? logger;
+  final Uri? releasesFile;
+  final Future<Uint8List> Function(Uri archiveUri)? _downloadOverride;
+  final HttpClient Function() _httpClientFactory;
+
+  NinjaBuildDownloader({
+    required this.buildFile,
+    required this.logger,
+    this.releasesFile,
+    Future<Uint8List> Function(Uri archiveUri)? downloadOverride,
+    HttpClient Function()? httpClientFactory,
+  }) : _downloadOverride = downloadOverride,
+       _httpClientFactory = httpClientFactory ?? HttpClient.new;
+
+  /// Reuses the local Ninja binary if present, otherwise downloads it.
+  Future<Uri> ensureAvailable() async {
+    final binary = _binaryUri;
+    if (await File.fromUri(binary).exists()) {
+      return binary;
+    }
+
+    final manifest = await _loadManifest();
+    final release = manifest.releaseForCurrentPlatform();
+    final archiveUri = manifest.archiveUriFor(release);
+    final archiveBytes =
+        await _downloadOverride?.call(archiveUri) ??
+        await _downloadArchive(archiveUri);
+    _verifySha256(archiveBytes, release.sha256);
+    await _extractBinary(archiveBytes, binary);
+
+    logger?.info('Downloaded ${binary.toFilePath()}.');
+    return binary;
+  }
+
+  Uri get _workingDirectory => File.fromUri(buildFile).parent.uri;
+
+  Uri get _binaryUri => _workingDirectory.resolve(_binaryName);
+
+  String get _binaryName => Platform.isWindows ? 'ninja.exe' : 'ninja';
+
+  /// Loads the release manifest shipped with this package.
+  Future<_NinjaReleaseManifest> _loadManifest() async {
+    final uri = releasesFile ?? await _defaultReleasesFile();
+    final contents = await File.fromUri(uri).readAsString();
+    final json = jsonDecode(contents);
+    if (json is! Map<String, Object?>) {
+      throw FormatException('Expected a JSON object in ${uri.toFilePath()}.');
+    }
+    return _NinjaReleaseManifest.fromJson(json);
+  }
+
+  /// Resolves the bundled release manifest from the package configuration.
+  Future<Uri> _defaultReleasesFile() async {
+    final uri = await Isolate.resolvePackageUri(
+      Uri.parse('package:native_toolchain_ninja/src/ninja/ninja_releases.json'),
+    );
+    if (uri == null) {
+      throw StateError('Could not resolve bundled ninja_releases.json.');
+    }
+    return uri;
+  }
+
+  /// Downloads the Ninja release archive into memory.
+  Future<Uint8List> _downloadArchive(Uri archiveUri) async {
+    final client = _httpClientFactory();
+    try {
+      final request = await client.getUrl(archiveUri);
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        final message =
+            'Failed to download $archiveUri: '
+                    '${response.statusCode} ${response.reasonPhrase}'
+                .trim();
+        throw HttpException(message, uri: archiveUri);
+      }
+      final bytes = BytesBuilder(copy: false);
+      await for (final chunk in response) {
+        bytes.add(chunk);
+      }
+      return bytes.takeBytes();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// Verifies the downloaded archive matches the expected SHA-256.
+  void _verifySha256(Uint8List archiveBytes, String expectedHash) {
+    final actual = sha256.convert(archiveBytes).toString();
+    final normalizedExpected = expectedHash.toLowerCase().replaceFirst(
+      'sha256:',
+      '',
+    );
+    if (actual != normalizedExpected) {
+      throw StateError(
+        'Downloaded Ninja archive hash mismatch. '
+        'Expected $normalizedExpected, got $actual.',
+      );
+    }
+  }
+
+  /// Extracts the Ninja executable from the release archive.
+  Future<void> _extractBinary(Uint8List archiveBytes, Uri binary) async {
+    final archive = ZipDecoder().decodeBytes(archiveBytes);
+    ArchiveFile? binaryFile;
+    for (final file in archive) {
+      if (!file.isFile) {
+        continue;
+      }
+      final name = file.name.replaceAll('\\', '/').split('/').last;
+      if (name == _binaryName) {
+        binaryFile = file;
+        break;
+      }
+    }
+    if (binaryFile == null) {
+      throw StateError(
+        'Downloaded Ninja archive did not contain $_binaryName.',
+      );
+    }
+
+    final output = File.fromUri(binary);
+    await output.parent.create(recursive: true);
+    final data = binaryFile.content;
+    await output.writeAsBytes(data, flush: true);
+    if (!Platform.isWindows) {
+      await Process.run('chmod', ['+x', output.path]);
+    }
+  }
+}
+
+final class _NinjaReleaseManifest {
+  final Uri prefix;
+  final Map<String, _NinjaRelease> releases;
+
+  _NinjaReleaseManifest({required this.prefix, required this.releases});
+
+  factory _NinjaReleaseManifest.fromJson(Map<String, Object?> json) {
+    final prefix = json['prefix'];
+    if (prefix is! String) {
+      throw const FormatException('Missing Ninja release prefix.');
+    }
+    final releases = <String, _NinjaRelease>{};
+    for (final entry in json.entries) {
+      if (entry.key == 'prefix') {
+        continue;
+      }
+      final releaseJson = entry.value;
+      if (releaseJson is! Map<String, Object?>) {
+        throw FormatException('Invalid release entry for ${entry.key}.');
+      }
+      releases[entry.key] = _NinjaRelease.fromJson(releaseJson);
+    }
+    return _NinjaReleaseManifest(
+      prefix: Uri.parse(prefix.endsWith('/') ? prefix : '$prefix/'),
+      releases: releases,
+    );
+  }
+
+  /// Selects the archive matching the current host OS and architecture.
+  _NinjaRelease releaseForCurrentPlatform() {
+    final key = switch (Abi.current()) {
+      Abi.linuxArm64 => 'linux-arm64',
+      Abi.linuxX64 => 'linux-x64',
+      Abi.macosArm64 || Abi.macosX64 => 'mac',
+      Abi.windowsArm64 => 'win-arm64',
+      Abi.windowsX64 => 'win-x64',
+      _ => null,
+    };
+    if (key == null || !releases.containsKey(key)) {
+      throw UnsupportedError(
+        'No bundled Ninja release for ${Platform.operatingSystem} '
+        '${Abi.current()}.',
+      );
+    }
+    return releases[key]!;
+  }
+
+  Uri archiveUriFor(_NinjaRelease release) => prefix.resolve(release.name);
+}
+
+final class _NinjaRelease {
+  final String name;
+  final String sha256;
+
+  _NinjaRelease({required this.name, required this.sha256});
+
+  factory _NinjaRelease.fromJson(Map<String, Object?> json) {
+    final name = json['name'];
+    final sha256 = json['sha256'];
+    if (name is! String || sha256 is! String) {
+      throw const FormatException(
+        'Ninja release entries need name and sha256.',
+      );
+    }
+    return _NinjaRelease(name: name, sha256: sha256);
+  }
+}

@@ -11,7 +11,6 @@ import 'package:code_assets/code_assets.dart';
 import 'package:collection/collection.dart';
 import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
-import 'package:native_toolchain_ninja/native_toolchain_ninja.dart';
 import 'package:test/test.dart';
 
 import '../helpers.dart';
@@ -121,7 +120,7 @@ void main() {
     // Note: don't check the entire message as CL output is based on user
     //       locale.
     final line = logs.firstWhereOrNull(
-      (log) => log.level == .INFO && log.message.contains('fatal error C1070'),
+      (log) => log.level >= .FINE && log.message.contains('fatal error C1070'),
     );
     expect(line != null, true);
   });

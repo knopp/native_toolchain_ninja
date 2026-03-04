@@ -44,28 +44,18 @@ Future<RunProcessResult> runProcess({
     runInShell: Platform.isWindows && workingDirectory != null,
   );
 
-  final stdoutSub = process.stdout.listen((List<int> data) {
-    try {
-      final decoded = systemEncoding.decode(data);
-      logger?.log(stdoutLogLevel, decoded);
-      if (captureOutput) {
-        stdoutBuffer.write(decoded);
-      }
-    } catch (e) {
-      logger?.warning('Failed to decode stdout: $e');
-      stdoutBuffer.write('Failed to decode stdout: $e');
+  final stdoutSub = _splitLines(process.stdout).listen((String line) {
+    logger?.log(stdoutLogLevel, line);
+    if (captureOutput) {
+      stdoutBuffer.write(line);
+      stdoutBuffer.write('\n');
     }
   });
-  final stderrSub = process.stderr.listen((List<int> data) {
-    try {
-      final decoded = systemEncoding.decode(data);
-      logger?.severe(decoded);
-      if (captureOutput) {
-        stderrBuffer.write(decoded);
-      }
-    } catch (e) {
-      logger?.severe('Failed to decode stderr: $e');
-      stderrBuffer.write('Failed to decode stderr: $e');
+  final stderrSub = _splitLines(process.stderr).listen((String line) {
+    logger?.severe(line);
+    if (captureOutput) {
+      stderrBuffer.write(line);
+      stderrBuffer.write('\n');
     }
   });
 
@@ -91,6 +81,34 @@ Future<RunProcessResult> runProcess({
     );
   }
   return result;
+}
+
+// The chunk may be shorter than a line, however this still assumes that new
+// line triggers new chunk.
+Stream<String> _splitLines(Stream<List<int>> data) async* {
+  final buffer = StringBuffer();
+  await for (final chunk in data) {
+    try {
+      final decoded = systemEncoding.decode(chunk);
+      if (decoded.endsWith('\n')) {
+        if (buffer.isNotEmpty) {
+          buffer.write(decoded);
+          yield buffer.toString();
+          buffer.clear();
+        } else {
+          yield decoded;
+        }
+      } else {
+        buffer.write(decoded);
+      }
+    } catch (e) {
+      yield 'Failed to decode chunk: $e';
+      continue;
+    }
+  }
+  if (buffer.isNotEmpty) {
+    yield buffer.toString();
+  }
 }
 
 /// Drop in replacement of [ProcessResult].

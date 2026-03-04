@@ -12,11 +12,14 @@ import 'package:logging/logging.dart';
 // import 'package:native_test_helpers/native_test_helpers.dart';
 import 'package:native_toolchain_ninja/src/native_toolchain/apple_clang.dart';
 import 'package:native_toolchain_ninja/src/native_toolchain/msvc.dart';
+import 'package:native_toolchain_ninja/src/ninja/ninja_builder.dart';
 import 'package:native_toolchain_ninja/src/tool/tool_resolver.dart';
 import 'package:native_toolchain_ninja/src/utils/run_process.dart';
 import 'package:test/test.dart';
 
 import 'find_package_root.dart';
+
+typedef CBuilder = NinjaBuilder;
 
 /// Returns a suffix for a test that is parameterized.
 ///
