@@ -9,7 +9,7 @@ This package copies the syntax of [native_toolchain_c](https://pub.dev/packages/
 
 Building through `ninja` allows for incremental builds, better dependency tracking and automatic `compile_commands.json` generation.
 
-Ninja does not need to be installed on the host system, it will be downloaded during the build. The download is checked against
+Ninja does not need to be installed on the host system, if missing it will be downloaded during the build. The download is checked against
 original sha256 checksum to ensure integrity. See [ninja_releases.json](lib/src/ninja/ninja_releases.json) for more information.
 
 ## Example

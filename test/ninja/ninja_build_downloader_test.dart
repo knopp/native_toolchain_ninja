@@ -40,6 +40,7 @@ void main() {
       buildFile: buildFile,
       logger: Logger('test'),
       releasesFile: manifestFile.uri,
+      systemNinjaOverride: () async => null,
       downloadOverride: (_) async => archiveBytes,
     );
 
@@ -69,10 +70,34 @@ void main() {
       buildFile: buildFile,
       logger: Logger('test'),
       releasesFile: manifestFile.uri,
+      systemNinjaOverride: () async => null,
       downloadOverride: (_) async => archiveBytes,
     );
 
     await expectLater(downloader.ensureAvailable(), throwsA(isA<BuildError>()));
+  });
+
+  test('NinjaBuildDownloader prefers system ninja over download', () async {
+    final tempUri = await tempDirForTest();
+    final buildFile = tempUri.resolve('build.ninja');
+    await File.fromUri(
+      buildFile,
+    ).writeAsString('ninja_required_version = 1.10');
+    final systemNinja = tempUri.resolve('system/$_binaryName');
+    await File.fromUri(systemNinja).create(recursive: true);
+
+    final downloader = NinjaBuildDownloader(
+      buildFile: buildFile,
+      logger: Logger('test'),
+      systemNinjaOverride: () async => systemNinja,
+      downloadOverride: (_) async {
+        fail('Download should not be called when system ninja exists.');
+      },
+    );
+
+    final executable = await downloader.ensureAvailable();
+    expect(executable, systemNinja);
+    expect(await File.fromUri(tempUri.resolve(_binaryName)).exists(), isFalse);
   });
 }
 
