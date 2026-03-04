@@ -10,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
+import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 
 /// Ensures a Ninja executable exists next to the generated build file.
@@ -72,7 +73,9 @@ final class NinjaBuildDownloader {
       Uri.parse('package:native_toolchain_ninja/src/ninja/ninja_releases.json'),
     );
     if (uri == null) {
-      throw StateError('Could not resolve bundled ninja_releases.json.');
+      throw BuildError(
+        message: 'Could not resolve bundled ninja_releases.json.',
+      );
     }
     return uri;
   }
@@ -108,9 +111,10 @@ final class NinjaBuildDownloader {
       '',
     );
     if (actual != normalizedExpected) {
-      throw StateError(
-        'Downloaded Ninja archive hash mismatch. '
-        'Expected $normalizedExpected, got $actual.',
+      throw BuildError(
+        message:
+            'Downloaded Ninja archive hash mismatch. '
+            'Expected $normalizedExpected, got $actual.',
       );
     }
   }
@@ -130,8 +134,8 @@ final class NinjaBuildDownloader {
       }
     }
     if (binaryFile == null) {
-      throw StateError(
-        'Downloaded Ninja archive did not contain $_binaryName.',
+      throw BuildError(
+        message: 'Downloaded Ninja archive did not contain $_binaryName.',
       );
     }
 

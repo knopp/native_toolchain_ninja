@@ -9,6 +9,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
+import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 import 'package:native_toolchain_ninja/src/ninja/ninja_build_downloader.dart';
 import 'package:test/test.dart';
@@ -71,7 +72,7 @@ void main() {
       downloadOverride: (_) async => archiveBytes,
     );
 
-    await expectLater(downloader.ensureAvailable(), throwsA(isA<StateError>()));
+    await expectLater(downloader.ensureAvailable(), throwsA(isA<BuildError>()));
   });
 }
 
