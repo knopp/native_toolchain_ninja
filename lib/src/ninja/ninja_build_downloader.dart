@@ -82,25 +82,42 @@ final class NinjaBuildDownloader {
 
   /// Downloads the Ninja release archive into memory.
   Future<Uint8List> _downloadArchive(Uri archiveUri) async {
-    final client = _httpClientFactory();
-    try {
-      final request = await client.getUrl(archiveUri);
-      final response = await request.close();
-      if (response.statusCode != HttpStatus.ok) {
-        final message =
-            'Failed to download $archiveUri: '
-                    '${response.statusCode} ${response.reasonPhrase}'
-                .trim();
-        throw HttpException(message, uri: archiveUri);
+    const maxAttempts = 5;
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      final client = _httpClientFactory();
+      try {
+        final request = await client.getUrl(archiveUri);
+        final response = await request.close();
+        if (response.statusCode != HttpStatus.ok) {
+          final message =
+              'Failed to download $archiveUri: '
+                      '${response.statusCode} ${response.reasonPhrase}'
+                  .trim();
+          throw HttpException(message, uri: archiveUri);
+        }
+        final bytes = BytesBuilder(copy: false);
+        await for (final chunk in response) {
+          bytes.add(chunk);
+        }
+        return bytes.takeBytes();
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+        if (attempt == maxAttempts) {
+          break;
+        }
+        logger?.warning(
+          'Failed to download $archiveUri '
+          '(attempt $attempt of $maxAttempts): $error',
+        );
+        await Future<void>.delayed(Duration(milliseconds: 200 * attempt));
+      } finally {
+        client.close(force: true);
       }
-      final bytes = BytesBuilder(copy: false);
-      await for (final chunk in response) {
-        bytes.add(chunk);
-      }
-      return bytes.takeBytes();
-    } finally {
-      client.close(force: true);
     }
+    Error.throwWithStackTrace(lastError!, lastStackTrace!);
   }
 
   /// Verifies the downloaded archive matches the expected SHA-256.
