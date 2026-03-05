@@ -5,9 +5,9 @@ A library to invoke the native C compiler installed on the host machine through 
 
 ## Status: Experimental
 
-This package copies the syntax of [native_toolchain_c](https://pub.dev/packages/native_toolchain_c). Simply replace `CBuilder` with `NinjaBuilder` and the build will be run through `ninja` instead of invoking the compiler directly.
+This package mirrors the API of [native_toolchain_c](https://pub.dev/packages/native_toolchain_c). Simply replace `CBuilder` with `NinjaBuilder` and the build will be run through `ninja` instead of invoking the compiler directly.
 
-Building through `ninja` allows for incremental builds, better dependency tracking and automatic `compile_commands.json` generation.
+Building through `ninja` allows for incremental nad parallel builds, better dependency tracking and automatic `compile_commands.json` generation.
 
 Ninja does not need to be installed on the host system, if missing it will be downloaded during the build. The download is checked against
 original sha256 checksum to ensure integrity. See [ninja_releases.json](lib/src/ninja/ninja_releases.json) for more information.
