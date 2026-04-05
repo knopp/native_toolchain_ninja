@@ -280,6 +280,7 @@ class NinjaBuilder {
 
     output.dependencies.addAll({
       ...ninjaDependencies,
+      ...resolvedSources,
       ...resolvedDartBuildFiles,
     });
   }
