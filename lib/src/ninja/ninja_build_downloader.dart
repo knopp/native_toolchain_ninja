@@ -13,8 +13,6 @@ import 'package:crypto/crypto.dart';
 import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 
-import '../tool/tool_resolver.dart';
-
 /// Ensures a Ninja executable exists next to the generated build file.
 final class NinjaBuildDownloader {
   final Uri buildFile;
@@ -23,6 +21,7 @@ final class NinjaBuildDownloader {
   final Future<Uint8List> Function(Uri archiveUri)? _downloadOverride;
   final Future<Uri?> Function()? _systemNinjaOverride;
   final HttpClient Function() _httpClientFactory;
+  final Map<String, String> _environment;
 
   NinjaBuildDownloader({
     required this.buildFile,
@@ -31,9 +30,11 @@ final class NinjaBuildDownloader {
     Future<Uint8List> Function(Uri archiveUri)? downloadOverride,
     Future<Uri?> Function()? systemNinjaOverride,
     HttpClient Function()? httpClientFactory,
+    Map<String, String>? environment,
   }) : _downloadOverride = downloadOverride,
        _systemNinjaOverride = systemNinjaOverride,
-       _httpClientFactory = httpClientFactory ?? HttpClient.new;
+       _httpClientFactory = httpClientFactory ?? HttpClient.new,
+       _environment = environment ?? Platform.environment;
 
   /// Reuses a system or local Ninja binary, otherwise downloads it.
   Future<Uri> ensureAvailable() async {
@@ -61,17 +62,32 @@ final class NinjaBuildDownloader {
     return binary;
   }
 
-  /// Resolves Ninja from the host PATH.
+  /// Resolves a usable Ninja executable from the host PATH.
   Future<Uri?> _systemNinja() async {
-    final executableName = Platform.isWindows ? 'ninja.exe' : 'ninja';
-    final resolved = await PathToolResolver(
-      toolName: 'Ninja',
-      executableName: executableName,
-    ).resolve(ToolResolvingContext(logger: logger));
-    if (resolved.isEmpty) {
-      return null;
+    final candidates = _pathCandidates();
+    for (final candidate in candidates) {
+      if (_isUsableSystemNinja(candidate)) {
+        return candidate;
+      }
     }
-    return resolved.first.uri;
+    return null;
+  }
+
+  bool _isUsableSystemNinja(Uri candidate) => Platform.isWindows
+      ? candidate.path.toLowerCase().endsWith('.exe')
+      : !_isShebangScript(candidate);
+
+  bool _isShebangScript(Uri candidate) {
+    RandomAccessFile? file;
+    try {
+      file = File.fromUri(candidate).openSync(mode: FileMode.read);
+      final bytes = file.readSync(2);
+      return bytes.length >= 2 && bytes[0] == 0x23 && bytes[1] == 0x21;
+    } on FileSystemException {
+      return false;
+    } finally {
+      file?.closeSync();
+    }
   }
 
   Uri get _workingDirectory => File.fromUri(buildFile).parent.uri;
@@ -79,6 +95,34 @@ final class NinjaBuildDownloader {
   Uri get _binaryUri => _workingDirectory.resolve(_binaryName);
 
   String get _binaryName => Platform.isWindows ? 'ninja.exe' : 'ninja';
+
+  /// Enumerates all Ninja candidates from PATH in search order.
+  List<Uri> _pathCandidates() {
+    final path = _environment['PATH'];
+    if (path == null || path.isEmpty) {
+      return const [];
+    }
+
+    final separator = Platform.isWindows ? ';' : ':';
+    final result = <Uri>[];
+    for (final entry in path.split(separator)) {
+      var trimmed = entry.trim();
+      if (trimmed.length > 1 &&
+          trimmed.startsWith('"') &&
+          trimmed.endsWith('"')) {
+        trimmed = trimmed.substring(1, trimmed.length - 1);
+      }
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final file = File.fromUri(Directory(trimmed).uri.resolve(_binaryName));
+      if (!file.existsSync()) {
+        continue;
+      }
+      result.add(file.uri);
+    }
+    return result;
+  }
 
   /// Loads the release manifest shipped with this package.
   Future<_NinjaReleaseManifest> _loadManifest() async {
