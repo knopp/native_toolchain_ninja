@@ -99,9 +99,80 @@ void main() {
     expect(executable, systemNinja);
     expect(await File.fromUri(tempUri.resolve(_binaryName)).exists(), isFalse);
   });
+
+  test('NinjaBuildDownloader picks first PATH Ninja candidate', () async {
+    final tempUri = await tempDirForTest();
+    final buildFile = tempUri.resolve('build.ninja');
+    await File.fromUri(
+      buildFile,
+    ).writeAsString('ninja_required_version = 1.10');
+
+    final firstDir = Directory.fromUri(tempUri.resolve('first/'));
+    final secondDir = Directory.fromUri(tempUri.resolve('second/'));
+    await firstDir.create(recursive: true);
+    await secondDir.create(recursive: true);
+
+    final firstCandidate = File.fromUri(firstDir.uri.resolve(_binaryName));
+    final secondCandidate = File.fromUri(secondDir.uri.resolve(_binaryName));
+    await firstCandidate.writeAsString('');
+    await secondCandidate.writeAsString('');
+
+    final downloader = NinjaBuildDownloader(
+      buildFile: buildFile,
+      logger: Logger('test'),
+      environment: {
+        ...Platform.environment,
+        'PATH': '${firstDir.path}$_pathSeparator${secondDir.path}',
+      },
+      downloadOverride: (_) async {
+        fail('Download should not be called when PATH contains usable ninja.');
+      },
+    );
+
+    final executable = await downloader.ensureAvailable();
+    expect(executable, firstCandidate.uri);
+  });
+
+  test('NinjaBuildDownloader skips shebang wrapper on non-Windows', () async {
+    if (Platform.isWindows) {
+      return;
+    }
+    final tempUri = await tempDirForTest();
+    final buildFile = tempUri.resolve('build.ninja');
+    await File.fromUri(
+      buildFile,
+    ).writeAsString('ninja_required_version = 1.10');
+
+    final firstDir = Directory.fromUri(tempUri.resolve('first/'));
+    final secondDir = Directory.fromUri(tempUri.resolve('second/'));
+    await firstDir.create(recursive: true);
+    await secondDir.create(recursive: true);
+
+    final firstCandidate = File.fromUri(firstDir.uri.resolve(_binaryName));
+    final secondCandidate = File.fromUri(secondDir.uri.resolve(_binaryName));
+    await firstCandidate.writeAsString('#!/bin/sh\necho wrapper\n');
+    await secondCandidate.writeAsString('');
+
+    final downloader = NinjaBuildDownloader(
+      buildFile: buildFile,
+      logger: Logger('test'),
+      environment: {
+        ...Platform.environment,
+        'PATH': '${firstDir.path}$_pathSeparator${secondDir.path}',
+      },
+      downloadOverride: (_) async {
+        fail('Download should not be called when PATH contains usable ninja.');
+      },
+    );
+
+    final executable = await downloader.ensureAvailable();
+    expect(executable, secondCandidate.uri);
+  });
 }
 
 String get _binaryName => Platform.isWindows ? 'ninja.exe' : 'ninja';
+
+String get _pathSeparator => Platform.isWindows ? ';' : ':';
 
 String get _releaseKey => switch (Abi.current()) {
   Abi.linuxArm64 => 'linux-arm64',
