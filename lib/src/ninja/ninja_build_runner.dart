@@ -5,6 +5,7 @@
 import 'dart:io';
 
 import 'package:logging/logging.dart';
+import 'package:meta/meta.dart';
 
 import '../utils/run_process.dart';
 
@@ -90,6 +91,10 @@ final class NinjaBuildRunner {
     }
     return dependencies;
   }
+
+  @visibleForTesting
+  Set<Uri> parseDependenciesForTesting(String stdout) =>
+      _parseDependencies(stdout);
 
   bool _isDependencyLine(String line) =>
       line.isNotEmpty &&
