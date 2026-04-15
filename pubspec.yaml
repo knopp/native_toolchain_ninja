@@ -1,7 +1,7 @@
 name: native_toolchain_ninja
 description: >-
   A library to generate Ninja build files for native assets and run Ninja builds.
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/knopp/native_toolchain_ninja
 
 topics:
