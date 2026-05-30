@@ -107,6 +107,19 @@ final class NinjaBuildGenerator {
     final environment = await _compilerResolver.resolveEnvironment(compiler);
     final targetArgs = await _resolvedTargetArgs(compiler);
 
+    if (_codeConfig.sanitizer != null) {
+      final sanitizer = _codeConfig.sanitizer!;
+      final isMsvc = compiler.tool == cl;
+      final supportedSanitizers = isMsvc ? _msvcSanitizers : _clangSanitizers;
+      if (!supportedSanitizers.containsKey(sanitizer)) {
+        final compilerName = isMsvc ? 'MSVC' : 'Clang-like compilers';
+        logger?.warning(
+          'The sanitizer \'$sanitizer\' is not supported on $compilerName '
+          'and will be ignored.',
+        );
+      }
+    }
+
     final objectsDirectory = Directory.fromUri(
       _outputDirectory.resolve('obj/'),
     );
@@ -136,6 +149,14 @@ final class NinjaBuildGenerator {
     logger?.info('Generated ${buildFile.toFilePath()}.');
     return GeneratedNinjaBuild(buildFile: buildFile);
   }
+
+  static const _clangSanitizers = {
+    Sanitizer.asan: '-fsanitize=address',
+    Sanitizer.msan: '-fsanitize=memory',
+    Sanitizer.tsan: '-fsanitize=thread',
+  };
+
+  static const _msvcSanitizers = {Sanitizer.asan: '/fsanitize=address'};
 
   /// Creates a stable hash from constructor arguments only.
   String _constructorArgumentsFingerprint() {
@@ -449,6 +470,12 @@ final class NinjaBuildGenerator {
       if (std != null) {
         yield '/std:$std';
       }
+      if (_codeConfig.sanitizer == Sanitizer.asan) {
+        yield '/Zi';
+      }
+      if (_msvcSanitizers.containsKey(_codeConfig.sanitizer)) {
+        yield _msvcSanitizers[_codeConfig.sanitizer]!;
+      }
       if (language == Language.cpp && !forLinking) {
         yield '/TP';
       }
@@ -471,6 +498,9 @@ final class NinjaBuildGenerator {
       yield* _picArgs(compiler.tool, forLinking: forLinking);
       if (std != null) {
         yield '-std=$std';
+      }
+      if (_clangSanitizers.containsKey(_codeConfig.sanitizer)) {
+        yield _clangSanitizers[_codeConfig.sanitizer]!;
       }
       if (language == Language.cpp) {
         if (!forLinking) {
