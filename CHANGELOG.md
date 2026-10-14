@@ -1,13 +1,17 @@
-## 0.1.0
+## 0.3.0
 
-- Initial version.
+- Update hooks and code_assets dependencies.
+
+## 0.2.0
+
+- Update hooks and code_assets dependencies.
+- Add support for sanitizers in code_assets.
 
 ## 0.1.1
 
 - Use system Ninja if present in PATH.
 - Only regenerates build files if the configuration changes. This results in faster incremental builds, especially on Windows.
 
-## 0.2.0
+## 0.1.0
 
-- Update hooks and code_assets dependencies.
-- Add support for sanitizers in code_assets.
+- Initial version.
