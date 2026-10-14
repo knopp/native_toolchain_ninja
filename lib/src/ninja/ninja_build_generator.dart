@@ -150,13 +150,13 @@ final class NinjaBuildGenerator {
     return GeneratedNinjaBuild(buildFile: buildFile);
   }
 
-  static final _clangSanitizers = {
+  static const _clangSanitizers = {
     Sanitizer.asan: '-fsanitize=address',
     Sanitizer.msan: '-fsanitize=memory',
     Sanitizer.tsan: '-fsanitize=thread',
   };
 
-  static final _msvcSanitizers = {Sanitizer.asan: '/fsanitize=address'};
+  static const _msvcSanitizers = {Sanitizer.asan: '/fsanitize=address'};
 
   /// Creates a stable hash from constructor arguments only.
   String _constructorArgumentsFingerprint() {
@@ -825,7 +825,7 @@ final class _CommandToken {
   const _CommandToken(this.value, {required this.raw});
 }
 
-final _androidTargets = {
+const _androidTargets = {
   Architecture.arm: 'armv7a-linux-androideabi',
   Architecture.arm64: 'aarch64-linux-android',
   Architecture.ia32: 'i686-linux-android',
@@ -833,12 +833,12 @@ final _androidTargets = {
   Architecture.riscv64: 'riscv64-linux-android',
 };
 
-final _appleMacTargets = {
+const _appleMacTargets = {
   Architecture.arm64: 'arm64-apple-darwin',
   Architecture.x64: 'x86_64-apple-darwin',
 };
 
-final _appleIosTargets = {
+const _appleIosTargets = {
   Architecture.arm64: {
     IOSSdk.iPhoneOS: 'arm64-apple-ios',
     IOSSdk.iPhoneSimulator: 'arm64-apple-ios-simulator',
@@ -846,19 +846,19 @@ final _appleIosTargets = {
   Architecture.x64: {IOSSdk.iPhoneSimulator: 'x86_64-apple-ios-simulator'},
 };
 
-final _clangWindowsTargets = {
+const _clangWindowsTargets = {
   Architecture.arm64: 'arm64-pc-windows-msvc',
   Architecture.ia32: 'i386-pc-windows-msvc',
   Architecture.x64: 'x86_64-pc-windows-msvc',
 };
 
-final _msvcMachineFlags = {
+const _msvcMachineFlags = {
   Architecture.arm64: 'ARM64',
   Architecture.ia32: 'X86',
   Architecture.x64: 'X64',
 };
 
-final _defaultCppLibraries = {
+const _defaultCppLibraries = {
   OS.android: 'c++_shared',
   OS.fuchsia: 'c++',
   OS.iOS: 'c++',
