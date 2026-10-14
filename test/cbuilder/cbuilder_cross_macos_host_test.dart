@@ -38,8 +38,26 @@ void main() async {
     stderr.writeln("Install with 'brew install lld' on macOS.");
   }
 
+  // Apple's ar always runs ranlib, which drops non-Mach-O members, so it
+  // produces empty archives for Linux targets. Homebrew lld depends on llvm.
+  final llvmArInstances = await InstallLocationResolver(
+    toolName: 'LLVM archiver',
+    paths: [
+      '/opt/homebrew/opt/llvm/bin/llvm-ar',
+      '/usr/local/opt/llvm/bin/llvm-ar',
+    ],
+  ).resolve(context);
+  final llvmArUri = llvmArInstances.firstOrNull?.uri;
+
+  if (llvmArUri == null) {
+    stderr.writeln(
+      'llvm-ar not found. Linux static cross-compilation tests will fail.',
+    );
+    stderr.writeln("Install with 'brew install llvm' on macOS.");
+  }
+
   // Dont include 'mach-o' or 'Mach-O', different spelling is used.
-  const objdumpFileFormat = {
+  final objdumpFileFormat = {
     (OS.macOS, Architecture.arm64): 'arm64',
     (OS.macOS, Architecture.x64): '64-bit x86-64',
     (OS.linux, Architecture.arm): 'elf32-littlearm',
@@ -139,6 +157,13 @@ void main() async {
         if (os == .linux) {
           // still respect the CI-provided compiler
           chosenCCompiler ??= await resolveAppleToolchain();
+          if (llvmArUri != null) {
+            chosenCCompiler = CCompilerConfig(
+              compiler: chosenCCompiler.compiler,
+              archiver: llvmArUri,
+              linker: chosenCCompiler.linker,
+            );
+          }
         }
 
         final buildInputBuilder = BuildInputBuilder()

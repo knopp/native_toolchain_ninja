@@ -39,7 +39,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu' }}
 
       - name: Install native toolchains
-        run: brew install lld
+        run: brew install lld llvm
         if: ${{ matrix.os == 'macos' }}
 
       - run: dart pub get
